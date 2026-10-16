@@ -42,18 +42,10 @@
         <input id="name" type="text" maxlength="18" value="Marina" placeholder="Em branco: some do crachá" autocomplete="off" spellcheck="false" />
       </label>
 
-      <label class="field">
-        <span class="label">Cargo</span>
-        <input id="role" type="text" maxlength="28" value="Gerente" placeholder="Em branco: some do crachá" autocomplete="off" spellcheck="false" />
-      </label>
-
       <div class="field">
-        <span class="label">Logo da marca</span>
-        <label class="upload">
-          <span>Trocar logo (SVG ou PNG)</span>
-          <input id="logo" type="file" accept=".svg,.png,image/svg+xml,image/png" />
-        </label>
-        <p class="note" id="logoNote">Logo provisório. Suba o arquivo oficial para gravar no aço.</p>
+        <label class="label" for="role">Cargo</label>
+        <input id="role" type="text" maxlength="28" value="Gerente de Loja" placeholder="Em branco: some do crachá" autocomplete="off" spellcheck="false" />
+        <div class="chips" id="roleChips" aria-label="Cargos desta marca"></div>
       </div>
     </aside>
   </main>

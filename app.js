@@ -17,15 +17,27 @@ const state = {
   name: document.getElementById('name').value,
   role: document.getElementById('role').value,
 };
-const customLogos = {};
-
-/* ---------- Marcas (placeholders até chegarem os SVGs oficiais) ---------- */
+/* ---------- Marcas: logos do manual-ragga, cargos da planilha "Cargos por lojas" ---------- */
+// h = altura máxima do logo em fração da placa (símbolos sobem mais que logotipos)
 const BRANDS = {
-  biggs:  { label: 'Biggs',  placeholder: { text: 'B', kind: 'glyph' } },
-  robs:   { label: "Rob's",  placeholder: { text: "Rob's", kind: 'word' } },
-  isaias: { label: 'Isaias', placeholder: { text: 'Isaias', kind: 'word' } },
-  mapoli: { label: 'Mapoli', placeholder: { text: 'M', kind: 'glyph' } },
+  biggs: {
+    label: 'Biggs', logo: 'logos/biggs-b.svg', h: 0.58,
+    roles: ['Gerente de Loja', 'Gerente Administrativo', 'Gerente de Salão', 'Gerente de Delivery', 'Caixa / Delivery', 'Garçom', 'Atendente de Delivery', 'Auxiliar de Sushiman'],
+  },
+  robs: {
+    label: "Rob's", logo: 'logos/robs.svg', h: 0.44,
+    roles: ['Líder de Loja', 'Atendente de Loja', 'Oficial de Entrega'],
+  },
+  isaias: {
+    label: 'Isaias', logo: 'logos/isaias.svg', h: 0.44,
+    roles: ['Gerente de Loja', 'Gerente Administrativo', 'Gerente de Atendimento', 'Caixa / Delivery', 'Garçom', 'Atendente de Delivery', 'Atendente de Recepção', 'Recepcionista'],
+  },
+  mapoli: {
+    label: 'Mapoli', logo: 'logos/mapoli-m.svg', h: 0.6,
+    roles: ['Garçom'],
+  },
 };
+const logos = {}; // canvas já recortado na tinta, por marca
 
 const HEAVY = (px) => `800 ${px}px "Dotties Vanilla", "Instrument Sans", sans-serif`;
 const SANS = (px, w = 600) => `${w} ${px}px "Instrument Sans", sans-serif`;
@@ -35,8 +47,8 @@ const canvas = document.getElementById('scene');
 const stage = document.getElementById('stage');
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, preserveDrawingBuffer: true });
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = 1.05;
+renderer.toneMapping = THREE.NeutralToneMapping; // mantém o vermelho e o amarelo das marcas fiéis
+renderer.toneMappingExposure = 1;
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.setClearColor(0x000000, 1);
 
@@ -66,7 +78,9 @@ function buildStudioEnv() {
     env.add(p);
   };
   const o = [0, 0, 0];
-  box(14, 9, 0.62, [0, 1.5, 9], o);     // preenchimento fraco atrás da câmera
+  // preenchimento atrás da câmera em faixas: a face pega um degradê que muda conforme inclina
+  [[-3.5, 0.18], [-1.8, 0.4], [0, 0.85], [1.8, 1.25], [3.6, 0.5], [5.4, 0.22]]
+    .forEach(([y, k]) => box(16, 1.8, k, [0, y, 9], o));
   box(12, 1.4, 4.5, [0, 3.6, 8], o);    // faixa alta: brilho que corre na escovação
   box(12, 0.5, 2.2, [0, -1.2, 8.5], o); // faixa baixa, mais fina
   box(2.2, 7, 1.6, [-5.5, 0.5, 7], o);  // softbox lateral frontal
@@ -94,31 +108,50 @@ function makeCanvas() {
   return c;
 }
 
-// Valor de escovação por pixel em [0,1]: linhas horizontais finas, com riscos que aparecem e somem.
+// Escovação por pixel em [0,1]: ruído com desfoque de movimento horizontal em duas escalas
+// (riscos longos + grão fino), mais faixas verticais largas o bastante para sobreviver ao mipmap
+// e alguns riscos fundos raros. Valores ~N(0.5, 0.12).
 const brush = (() => {
-  const v = new Float32Array(TEX_W * TEX_H);
   const rnd = mulberry32(7);
-  const rowA = new Float32Array(TEX_H);
-  const rowB = new Float32Array(TEX_H);
-  const freq = new Float32Array(TEX_H);
-  const phase = new Float32Array(TEX_H);
-  for (let y = 0; y < TEX_H; y++) {
-    rowA[y] = rnd();
-    rowB[y] = rnd() * rnd();
-    freq[y] = 0.0015 + rnd() * 0.012;
-    phase[y] = rnd() * Math.PI * 2;
-  }
-  // suaviza um pouco entre linhas vizinhas para não ficar "código de barras"
-  const smooth = new Float32Array(TEX_H);
-  for (let y = 0; y < TEX_H; y++) {
-    const a = rowA[Math.max(0, y - 1)], b = rowA[y], c = rowA[Math.min(TEX_H - 1, y + 1)];
-    smooth[y] = a * 0.25 + b * 0.5 + c * 0.25;
-  }
-  for (let y = 0; y < TEX_H; y++) {
+  const gauss = () => (rnd() + rnd() + rnd() + rnd() - 2) * 0.866; // ~N(0,1)
+  const v = new Float32Array(TEX_W * TEX_H);
+
+  // ruído 1D horizontal borrado com caixa de raio r, padronizado
+  const row = new Float32Array(TEX_W);
+  const tmp = new Float32Array(TEX_W);
+  function streakRow(r, out) {
+    for (let x = 0; x < TEX_W; x++) row[x] = rnd() - 0.5;
+    let acc = 0;
+    for (let x = -r; x <= r; x++) acc += row[(x + TEX_W) % TEX_W];
+    const k = Math.sqrt(2 * r + 1) / 0.2887 / (2 * r + 1);
     for (let x = 0; x < TEX_W; x++) {
-      const streak = rowB[y] * Math.max(0, Math.sin(x * freq[y] + phase[y]));
-      const n = smooth[y] * 0.65 + streak * 0.55 + (rnd() - 0.5) * 0.06;
-      v[y * TEX_W + x] = Math.min(1, Math.max(0, n));
+      tmp[x] = acc * k;
+      acc += row[(x + r + 1) % TEX_W] - row[(x - r + TEX_W) % TEX_W];
+    }
+    out.set(tmp);
+  }
+
+  // riscos longos calculados a cada STEP linhas e interpolados: engrossa o risco sem borrar o grão
+  const STEP = 3;
+  const keys = Math.ceil(TEX_H / STEP) + 1;
+  const longRows = Array.from({ length: keys }, () => { const r = new Float32Array(TEX_W); streakRow(90, r); return r; });
+
+  // faixas largas na vertical (bandas de brilho que se vê a olho nu)
+  const band = new Float32Array(TEX_H);
+  { const raw = Array.from({ length: TEX_H }, gauss); const R = 7;
+    for (let y = 0; y < TEX_H; y++) { let s = 0; for (let k = -R; k <= R; k++) s += raw[Math.min(TEX_H - 1, Math.max(0, y + k))]; band[y] = s / Math.sqrt(2 * R + 1); } }
+  const fineRow = new Float32Array(TEX_H).map(gauss);
+
+  const fine = new Float32Array(TEX_W);
+  for (let y = 0; y < TEX_H; y++) {
+    streakRow(6, fine);
+    const ky = y / STEP, k0 = Math.floor(ky), t = ky - k0;
+    const L0 = longRows[k0], L1 = longRows[Math.min(keys - 1, k0 + 1)];
+    const scratch = rnd() < 0.012 ? -(0.8 + rnd() * 1.6) : 0; // risco fundo ocasional
+    for (let x = 0; x < TEX_W; x++) {
+      const long = L0[x] * (1 - t) + L1[x] * t;
+      const z = long * 0.5 + fine[x] * 0.32 + band[y] * 0.42 + fineRow[y] * 0.3 + scratch * (0.6 + 0.4 * Math.max(0, long));
+      v[y * TEX_W + x] = Math.min(1, Math.max(0, 0.5 + z * 0.12));
     }
   }
   return v;
@@ -138,9 +171,10 @@ function paintBase(canvas, fn) {
 
 // Bases estáticas (sem gravação)
 const base = {
-  color: paintBase(makeCanvas(), (v) => { const k = 236 + v * 19; return [k, k, k]; }),
-  orm:   paintBase(makeCanvas(), (v) => [255, 62 + v * 40, 255]),       // G = rugosidade, B = metalicidade
-  bump:  paintBase(makeCanvas(), (v) => { const k = 190 + v * 50; return [k, k, k]; }),
+  // tom do alumínio embutido aqui (não na cor do material) para não acinzentar os logos coloridos
+  color: paintBase(makeCanvas(), (v) => { const k = 0.8 + v * 0.2; return [214 * k, 217 * k, 222 * k]; }),
+  orm:   paintBase(makeCanvas(), (v) => [255, 50 + (1 - v) * 55, 255]), // G = rugosidade (vale = mais fosco), B = metalicidade
+  bump:  paintBase(makeCanvas(), (v) => { const k = 70 + v * 150; return [k, k, k]; }),
   aniso: paintBase(makeCanvas(), () => [255, 128, 255]),                 // direção X, força total
 };
 
@@ -225,15 +259,15 @@ function buildBadgeGeometry() {
 
 const STEEL = 0xd3d6db;
 const faceMaterial = (t) => new THREE.MeshPhysicalMaterial({
-  color: STEEL,
+  color: 0xffffff,
   map: t.color,
   metalness: 1,
   metalnessMap: t.orm,
   roughness: 1,
   roughnessMap: t.orm,
   bumpMap: t.bump,
-  bumpScale: 1.6,
-  anisotropy: 0.85,
+  bumpScale: 0.9,
+  anisotropy: 1,
   anisotropyMap: t.aniso,
   envMapIntensity: 1.25,
 });
@@ -276,34 +310,51 @@ function fitFont(ctx, text, font, maxW, maxPx, minPx) {
   return px;
 }
 
-function drawPlaceholderLogo(ctx, ph, box) {
-  ctx.save();
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'alphabetic';
-  // letra única ocupa a altura toda; palavra é limitada pela largura
-  const maxPx = ph.kind === 'glyph' ? box.h * 1.45 : box.h * 0.95;
-  fitFont(ctx, ph.text, HEAVY, box.w, maxPx, 20);
-  const mt = ctx.measureText(ph.text);
-  const textH = mt.actualBoundingBoxAscent + mt.actualBoundingBoxDescent;
-  const cx = box.x + mt.actualBoundingBoxLeft; // tinta alinhada à esquerda da caixa
-  const cy = box.y + box.h / 2 + textH / 2 - mt.actualBoundingBoxDescent;
-  ctx.fillText(ph.text, cx, cy);
-  ctx.restore();
+// Rasteriza o SVG em alta e recorta na tinta: os arquivos do manual têm respiro diferente (o do Rob's é um quadrado 1080).
+async function loadLogo(url) {
+  const img = new Image();
+  img.src = url;
+  await img.decode();
+  const s = 2400 / Math.max(img.naturalWidth, img.naturalHeight);
+  const c = document.createElement('canvas');
+  c.width = Math.round(img.naturalWidth * s);
+  c.height = Math.round(img.naturalHeight * s);
+  const ctx = c.getContext('2d');
+  ctx.drawImage(img, 0, 0, c.width, c.height);
+  const { data } = ctx.getImageData(0, 0, c.width, c.height);
+  let x0 = c.width, y0 = c.height, x1 = -1, y1 = -1;
+  for (let y = 0; y < c.height; y++) {
+    for (let x = 0; x < c.width; x++) {
+      if (data[(y * c.width + x) * 4 + 3] > 8) {
+        if (x < x0) x0 = x; if (x > x1) x1 = x;
+        if (y < y0) y0 = y; if (y > y1) y1 = y;
+      }
+    }
+  }
+  const out = document.createElement('canvas');
+  out.width = x1 - x0 + 1;
+  out.height = y1 - y0 + 1;
+  out.getContext('2d').drawImage(c, -x0, -y0);
+  return out;
 }
 
-function drawImageLogo(ctx, img, box) {
+function drawLogo(ctx, img, box, colored) {
   const scale = Math.min(box.w / img.width, box.h / img.height);
-  const w = img.width * scale;
-  const h = img.height * scale;
+  const w = Math.round(img.width * scale);
+  const h = Math.round(img.height * scale);
   const tmp = document.createElement('canvas');
-  tmp.width = Math.ceil(box.w);
-  tmp.height = Math.ceil(box.h);
+  tmp.width = w;
+  tmp.height = h;
   const t = tmp.getContext('2d');
-  t.drawImage(img, 0, (box.h - h) / 2, w, h); // alinhado à esquerda, como o logo da referência
-  t.globalCompositeOperation = 'source-in';
-  t.fillStyle = ctx.fillStyle;
-  t.fillRect(0, 0, tmp.width, tmp.height);
-  ctx.drawImage(tmp, box.x, box.y);
+  t.drawImage(img, 0, 0, w, h);
+  // na camada de cor o logo sai com as cores do manual; nas outras vira máscara de tinta
+  if (!colored) {
+    t.globalCompositeOperation = 'source-in';
+    t.fillStyle = ctx.fillStyle;
+    t.fillRect(0, 0, w, h);
+  }
+  // alinhado à esquerda e centralizado na altura, como o logo da referência
+  ctx.drawImage(tmp, box.x, box.y + (box.h - h) / 2);
 }
 
 function strokeRoundedRect(ctx, { x, y, w, h, r, line }) {
@@ -318,16 +369,18 @@ function capHeight(ctx) {
   return ctx.measureText('H').actualBoundingBoxAscent;
 }
 
-function drawArt(ctx, fill) {
+function drawArt(ctx, fill, colored = false) {
   const { frame, logoBox, textCx, textW, cy, fh } = layout;
   ctx.fillStyle = fill;
   ctx.strokeStyle = fill;
 
   strokeRoundedRect(ctx, frame);
 
-  const custom = customLogos[state.brand];
-  if (custom) drawImageLogo(ctx, custom, logoBox);
-  else drawPlaceholderLogo(ctx, BRANDS[state.brand].placeholder, logoBox);
+  const logo = logos[state.brand];
+  if (logo) {
+    const lh = fh * BRANDS[state.brand].h;
+    drawLogo(ctx, logo, { x: logoBox.x, y: layout.cy - lh / 2, w: logoBox.w, h: lh }, colored);
+  }
 
   const name = state.name.trim().toUpperCase();
   const role = state.role.trim().toUpperCase();
@@ -369,18 +422,18 @@ function drawArt(ctx, fill) {
 
 function composeFront() {
   const layers = [
-    // [canvas, base, cor da tinta, desfoque]
-    [front.color, base.color, '#0a0a0b', 0],          // impressão UV preta
-    [front.orm,   base.orm,   'rgb(255,120,0)', 0],   // tinta: semifosca e não metálica
-    [front.bump,  base.bump,  '#ffffff', 1.5],        // tinta fica levemente acima do alumínio
-    [front.aniso, base.aniso, 'rgb(255,128,0)', 0],   // sem escovação sobre a tinta
+    // [canvas, base, cor da tinta, desfoque, logo colorido]
+    [front.color, base.color, '#0a0a0b', 0, true],          // impressão UV: texto preto, logo nas cores da marca
+    [front.orm,   base.orm,   'rgb(255,120,0)', 0, false],  // tinta: semifosca e não metálica
+    [front.bump,  base.bump,  '#ffffff', 1.5, false],       // tinta fica levemente acima do alumínio
+    [front.aniso, base.aniso, 'rgb(255,128,0)', 0, false],  // sem escovação sobre a tinta
   ];
-  for (const [cv, src, fill, blur] of layers) {
+  for (const [cv, src, fill, blur, colored] of layers) {
     const ctx = cv.getContext('2d');
     ctx.filter = 'none';
     ctx.drawImage(src, 0, 0);
     ctx.filter = blur ? `blur(${blur}px)` : 'none';
-    drawArt(ctx, fill);
+    drawArt(ctx, fill, colored);
     ctx.filter = 'none';
   }
   for (const t of Object.values(frontTex)) t.needsUpdate = true;
@@ -395,14 +448,30 @@ function queueCompose() {
 
 /* ---------- UI ---------- */
 const brandButtons = [...document.querySelectorAll('#brands button')];
-const logoNote = document.getElementById('logoNote');
+const roleInput = document.getElementById('role');
+const roleChips = document.getElementById('roleChips');
+
+// Atalhos com os cargos que existem na marca selecionada; o campo continua livre.
+function renderRoleChips() {
+  roleChips.replaceChildren(...BRANDS[state.brand].roles.map((r) => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.textContent = r;
+    b.setAttribute('aria-pressed', String(r.toUpperCase() === state.role.trim().toUpperCase()));
+    b.addEventListener('click', () => {
+      roleInput.value = r;
+      state.role = r;
+      renderRoleChips();
+      queueCompose();
+    });
+    return b;
+  }));
+}
 
 function setBrand(brand) {
   state.brand = brand;
   for (const b of brandButtons) b.setAttribute('aria-checked', String(b.dataset.brand === brand));
-  logoNote.textContent = customLogos[brand]
-    ? `Logo enviado para ${BRANDS[brand].label}.`
-    : 'Logo provisório. Suba o arquivo oficial para gravar no aço.';
+  renderRoleChips();
   queueCompose();
 }
 
@@ -418,22 +487,7 @@ document.getElementById('brands').addEventListener('keydown', (e) => {
 });
 
 document.getElementById('name').addEventListener('input', (e) => { state.name = e.target.value; queueCompose(); });
-document.getElementById('role').addEventListener('input', (e) => { state.role = e.target.value; queueCompose(); });
-
-document.getElementById('logo').addEventListener('change', (e) => {
-  const file = e.target.files?.[0];
-  if (!file) return;
-  const url = URL.createObjectURL(file);
-  const img = new Image();
-  img.onload = () => {
-    // SVG sem width/height chega com 0: força uma resolução de trabalho
-    if (!img.width || !img.height) { img.width = 1024; img.height = 1024; }
-    customLogos[state.brand] = img;
-    setBrand(state.brand);
-  };
-  img.src = url;
-  e.target.value = '';
-});
+roleInput.addEventListener('input', (e) => { state.role = e.target.value; renderRoleChips(); queueCompose(); });
 
 /* ---------- Loop ---------- */
 const hint = document.querySelector('.hint');
@@ -473,9 +527,11 @@ function mulberry32(a) {
 }
 
 await Promise.all([
-  document.fonts.load(HEAVY(100), 'Ag'),
-  document.fonts.load(SANS(100), 'Ag'),
+  document.fonts.load(SANS(100, 400), 'Ag'),
+  document.fonts.load(SANS(100, 500), 'Ag'),
+  ...Object.entries(BRANDS).map(async ([k, b]) => { logos[k] = await loadLogo(b.logo); }),
 ]);
+renderRoleChips();
 composeFront();
 resize();
 tick();

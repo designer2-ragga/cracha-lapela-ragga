@@ -183,6 +183,44 @@ input[type="text"] {
 input[type="text"]:hover { background: var(--surface-hover); }
 input[type="text"]:focus { outline: none; box-shadow: inset 0 0 0 1px var(--roxo-text); }
 
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 2px;
+}
+.chips button {
+  position: relative;
+  height: 30px;
+  padding: 0 11px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--surface);
+  box-shadow: inset 0 0 0 1px var(--hairline);
+  color: var(--muted);
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 500;
+  cursor: pointer;
+  transition-property: background-color, color, scale;
+  transition-duration: 160ms;
+  transition-timing-function: var(--ease);
+}
+/* área de toque de 40px sem aumentar o chip */
+.chips button::after {
+  content: "";
+  position: absolute;
+  inset: -5px -2px;
+}
+.chips button:hover { color: var(--text); background: var(--surface-hover); }
+.chips button:active { scale: 0.96; }
+.chips button[aria-pressed="true"] {
+  background: var(--roxo);
+  color: var(--text);
+  box-shadow: none;
+}
+.chips button:focus-visible { outline: 2px solid var(--roxo-text); outline-offset: 2px; }
+
 .upload {
   position: relative;
   display: flex;
