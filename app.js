@@ -29,12 +29,12 @@ const STANDARD_ROLES = ['Caixa', 'Caixa / Delivery', 'Garçom', 'Gerente de Sal�
 
 const BRANDS = {
   biggs: {
-    label: 'Biggs', ink: 'Vermelho Biggs', main: '#D82C32', logo: 'logos/biggs-b.svg', tile: 'logos/ui/biggs.svg', h: 0.58,
+    label: 'Biggs', ink: 'Vermelho Biggs', logo: 'logos/biggs-b.svg', tile: 'logos/ui/biggs.svg', h: 0.58,
     roles: STANDARD_ROLES,
     enamels: [{ id: 'red', label: 'Esmalte vermelho', color: '#D82C32' }],
   },
   robs: {
-    label: "Rob's", ink: "Vermelho Rob's", main: '#C3161C', logo: 'logos/robs.svg', tile: 'logos/ui/robs.svg', h: 0.44,
+    label: "Rob's", ink: "Vermelho Rob's", logo: 'logos/robs.svg', tile: 'logos/ui/robs.svg', h: 0.44,
     roles: ['Líder de Loja', 'Atendente de Loja', 'Oficial de Entrega'],
     // amarelo = selo circular oficial; alaranjado é proposta (não há laranja no manual)
     // fundo claro: letras e logo em esmalte escuro, porque metal sobre amarelo some
@@ -44,18 +44,18 @@ const BRANDS = {
     ],
   },
   isaias: {
-    label: 'Isaias', ink: 'Amarelo Isaias', main: '#FFC025', logo: 'logos/isaias.svg', tile: 'logos/ui/isaias.svg', h: 0.44,
+    label: 'Isaias', ink: 'Amarelo Isaias', logo: 'logos/isaias.svg', tile: 'logos/ui/isaias.svg', h: 0.44,
     roles: STANDARD_ROLES,
     enamels: [{ id: 'black', label: 'Esmalte preto', color: '#1a1410' }],
   },
   mapoli: {
-    label: 'Mapoli', ink: 'Vermelho Mapoli', main: '#E73439', logo: 'logos/mapoli-m.svg', tile: 'logos/ui/mapoli.svg', h: 0.6,
+    label: 'Mapoli', ink: 'Vermelho Mapoli', logo: 'logos/mapoli-m.svg', tile: 'logos/ui/mapoli.svg', h: 0.6,
     roles: ['Garçom'],
     enamels: [{ id: 'brown', label: 'Esmalte marrom', color: '#442924' }], // Marrom profundo, manual Mapoli (476 C)
   },
   pepito: {
     // sem aba na planilha de cargos: só o campo livre por enquanto
-    label: 'Pepito', ink: 'Vermelho Pepito', main: '#E73A28', logo: 'logos/pepito.svg', tile: 'logos/ui/pepito.svg', h: 0.44,
+    label: 'Pepito', ink: 'Vermelho Pepito', logo: 'logos/pepito.svg', tile: 'logos/ui/pepito.svg', h: 0.44,
     roles: [],
     enamels: [{ id: 'red', label: 'Esmalte vermelho', color: '#e73a28' }],
   },
@@ -90,7 +90,6 @@ controls.enableDamping = true;
 controls.dampingFactor = 0.06;
 controls.enablePan = false;
 controls.minDistance = 7;
-controls.maxDistance = 30;
 controls.rotateSpeed = 0.7;
 // limita o giro para não mostrar a borda do tecido
 controls.minAzimuthAngle = -0.75;
@@ -593,11 +592,8 @@ function drawArt(ctx, fill, colored = false, frameLine = true) {
 
   ctx.textAlign = 'center';
   ctx.textBaseline = 'alphabetic';
-  // texto sempre acompanha o logo: na camada de cor, usa a mesma cor que o logo recebeu
-  if (colored) {
-    const ink = state.logoInk[state.brand];
-    ctx.fillStyle = ink === 'brand' ? BRANDS[state.brand].main : LOGO_INK[ink];
-  }
+  // no escovado, nome e cargo são sempre impressos em preto, qualquer que seja a cor do logo
+  ctx.fillStyle = fill;
   const NAME = (px) => MONT(px, 400);
   const ROLE = (px) => MONT(px, 500);
 
@@ -862,6 +858,8 @@ function resize() {
   camera.aspect = w / h;
   // em telas estreitas, afasta a câmera para o crachá caber
   const fitDist = (W * 1.35) / (2 * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) * camera.aspect);
+  // o limite de afastamento cresce junto, senão o OrbitControls puxa a câmera de volta e corta o crachá
+  controls.maxDistance = Math.max(22, fitDist * 1.3);
   if (camera.aspect < 1.2) camera.position.setLength(Math.max(14, fitDist));
   camera.updateProjectionMatrix();
 }
