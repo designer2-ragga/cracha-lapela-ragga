@@ -14,6 +14,8 @@ const TEX_H = Math.round(TEX_W * (H + BEVEL * 2) / (W + BEVEL * 2));
 /* ---------- Estado ---------- */
 const state = {
   brand: 'biggs',
+  logoInk: 'brand', // 'brand' | 'black' | 'white'
+  fabric: 'black',
   name: document.getElementById('name').value,
   role: document.getElementById('role').value,
 };
@@ -38,9 +40,11 @@ const BRANDS = {
   },
 };
 const logos = {}; // canvas já recortado na tinta, por marca
+const LOGO_INK = { black: '#0a0a0b', white: '#f4f4f2' };
 
 const HEAVY = (px) => `800 ${px}px "Dotties Vanilla", "Instrument Sans", sans-serif`;
 const SANS = (px, w = 600) => `${w} ${px}px "Instrument Sans", sans-serif`;
+const MONT = (px, w = 400) => `${w} ${px}px "Montserrat", sans-serif`; // tipografia do crachá
 
 /* ---------- Renderer / cena ---------- */
 const canvas = document.getElementById('scene');
@@ -51,6 +55,8 @@ renderer.toneMapping = THREE.NeutralToneMapping; // mantém o vermelho e o amare
 renderer.toneMappingExposure = 1;
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.setClearColor(0x000000, 1);
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x000000);
@@ -65,6 +71,12 @@ controls.enablePan = false;
 controls.minDistance = 7;
 controls.maxDistance = 30;
 controls.rotateSpeed = 0.7;
+// limita o giro para não mostrar a borda do tecido
+controls.minAzimuthAngle = -0.75;
+controls.maxAzimuthAngle = 0.75;
+controls.minPolarAngle = Math.PI / 2 - 0.6;
+controls.maxPolarAngle = Math.PI / 2 + 0.6;
+controls.maxDistance = 22;
 
 /* Ambiente de estúdio: preto infinito com softboxes. É o que o metal reflete. */
 function buildStudioEnv() {
@@ -98,7 +110,16 @@ scene.environment = buildStudioEnv();
 
 const key = new THREE.DirectionalLight(0xffffff, 0.6);
 key.position.set(-4, 6, 8);
+key.castShadow = true;
+key.shadow.mapSize.set(2048, 2048);
+key.shadow.radius = 6;
+key.shadow.bias = -0.0004;
+key.shadow.normalBias = 0.02;
+Object.assign(key.shadow.camera, { left: -7, right: 7, top: 5, bottom: -5, near: 1, far: 30 });
 scene.add(key);
+// luz macia só para o tecido ganhar volume (o metal quase não reage a ela)
+const fill = new THREE.HemisphereLight(0xffffff, 0x202024, 0.0);
+scene.add(fill);
 
 /* ---------- Textura de escovação ---------- */
 function makeCanvas() {
@@ -201,12 +222,6 @@ const frontTex = {
   bump: tex(front.bump),
   aniso: tex(front.aniso),
 };
-const backTex = {
-  color: tex(base.color, true),
-  orm: tex(base.orm),
-  bump: tex(base.bump),
-  aniso: tex(base.aniso),
-};
 
 /* ---------- Geometria ---------- */
 function roundedRect(shape, x, y, w, h, r) {
@@ -274,15 +289,174 @@ const faceMaterial = (t) => new THREE.MeshPhysicalMaterial({
 
 const materials = [
   faceMaterial(frontTex),
-  faceMaterial(backTex),
+  // verso: metal liso acetinado, sem escovação e sem impressão
+  new THREE.MeshPhysicalMaterial({ color: STEEL, metalness: 1, roughness: 0.3, envMapIntensity: 1.2 }),
   // chanfro e laterais: polido, como borda lapidada de crachá metálico
   new THREE.MeshPhysicalMaterial({ color: STEEL, metalness: 1, roughness: 0.16, envMapIntensity: 1.4 }),
 ];
 
 const badge = new THREE.Mesh(buildBadgeGeometry(), materials);
+badge.castShadow = true;
 const floatGroup = new THREE.Group();
-floatGroup.add(badge);
-scene.add(floatGroup);
+floatGroup.add(badge, buildMagnet());
+const rig = new THREE.Group(); // crachá + tecido se movem juntos
+rig.add(floatGroup);
+scene.add(rig);
+
+/* Prendedor magnético colado no verso (1 unidade = 10 mm):
+   tira lisa de 46 x 13 mm com dois discos de ímã de 10 mm saltados. */
+function buildMagnet() {
+  const g = new THREE.Group();
+  const backZ = -(DEPTH / 2 + BEVEL);
+
+  const SW = 4.6, SH = 1.3, SD = 0.06, SB = 0.02;
+  const shape = new THREE.Shape();
+  roundedRect(shape, -SW / 2, -SH / 2, SW, SH, 0.16);
+  const stripGeo = new THREE.ExtrudeGeometry(shape, {
+    depth: SD, bevelEnabled: true, bevelThickness: SB, bevelSize: SB, bevelSegments: 3, curveSegments: 16,
+  });
+  stripGeo.translate(0, 0, backZ - SD - SB); // face da frente da tira encosta no verso
+  const nickel = new THREE.MeshPhysicalMaterial({ color: 0xc9ccd2, metalness: 1, roughness: 0.24, envMapIntensity: 1.3 });
+  g.add(new THREE.Mesh(stripGeo, nickel));
+
+  // disco com topo plano e borda arredondada (perfil girado em torno do eixo)
+  const R = 0.5, Hd = 0.25, f = 0.07;
+  const prof = [new THREE.Vector2(0, 0), new THREE.Vector2(R, 0), new THREE.Vector2(R, Hd - f)];
+  for (let i = 1; i <= 8; i++) {
+    const a = (i / 8) * (Math.PI / 2);
+    prof.push(new THREE.Vector2(R - f + Math.cos(a) * f, Hd - f + Math.sin(a) * f));
+  }
+  prof.push(new THREE.Vector2(0, Hd));
+  const discGeo = new THREE.LatheGeometry(prof, 64);
+  discGeo.rotateX(-Math.PI / 2); // altura do perfil passa a apontar para trás (-z)
+  const chrome = new THREE.MeshPhysicalMaterial({ color: 0xdfe2e6, metalness: 1, roughness: 0.1, envMapIntensity: 1.5 });
+  const stripBack = backZ - SD - SB * 2;
+  for (const x of [-1.55, 1.55]) {
+    const d = new THREE.Mesh(discGeo, chrome);
+    d.position.set(x, 0, stripBack);
+    g.add(d);
+  }
+  return g;
+}
+
+
+/* ---------- Tecido (peito de quem usa o crachá) ---------- */
+const FABRICS = {
+  none:   { label: 'Sem tecido' },
+  black:  { label: 'Preto',  color: '#151517' },
+  white:  { label: 'Branco', color: '#e9e8e4' },
+  ragga:  { label: 'Ragga',  color: '#2d1b4e' },
+  biggs:  { label: 'Biggs',  color: '#d82c32' },
+  robs:   { label: "Rob's",  color: '#c3161c' },
+  isaias: { label: 'Isaias', color: '#ffc025' },
+  mapoli: { label: 'Mapoli', color: '#e73439' },
+};
+
+// Sarja 2/2 (diagonal de camisa social / uniforme): altura de cada fio vira normal map,
+// e a variação de tom entre fios vira o mapa de cor.
+function buildWeave() {
+  const S = 512, N = 48, cell = S / N;
+  const rnd = mulberry32(21);
+  const warpTone = Array.from({ length: N }, () => 0.86 + rnd() * 0.14);
+  const weftTone = Array.from({ length: N }, () => 0.86 + rnd() * 0.14);
+  const hgt = new Float32Array(S * S);
+  const alb = new Float32Array(S * S);
+  for (let y = 0; y < S; y++) {
+    for (let x = 0; x < S; x++) {
+      const i = Math.floor(x / cell), j = Math.floor(y / cell);
+      const u = (x % cell) / cell, v = (y % cell) / cell;
+      const warpOver = ((i + j) % 4) < 2;
+      const across = warpOver ? u : v;   // perfil do fio de cima
+      const along = warpOver ? v : u;    // afunda onde o fio passa por baixo
+      const round = Math.sqrt(Math.max(0, 1 - (2 * across - 1) ** 2));
+      const dip = 0.72 + 0.28 * Math.sin(Math.PI * along);
+      const fiber = (rnd() - 0.5) * 0.18;
+      const h = round * dip + fiber * round;
+      hgt[y * S + x] = h;
+      const tone = warpOver ? warpTone[i] : weftTone[j];
+      alb[y * S + x] = tone * (0.7 + 0.3 * h);
+    }
+  }
+  const colorC = document.createElement('canvas');
+  const normalC = document.createElement('canvas');
+  colorC.width = colorC.height = normalC.width = normalC.height = S;
+  const ci = colorC.getContext('2d').createImageData(S, S);
+  const ni = normalC.getContext('2d').createImageData(S, S);
+  const at = (x, y) => hgt[((y + S) % S) * S + ((x + S) % S)];
+  const k = 2.2;
+  for (let y = 0; y < S; y++) {
+    for (let x = 0; x < S; x++) {
+      const o = (y * S + x) * 4;
+      const a = Math.round(alb[y * S + x] * 255);
+      ci.data[o] = ci.data[o + 1] = ci.data[o + 2] = a; ci.data[o + 3] = 255;
+      let nx = (at(x - 1, y) - at(x + 1, y)) * k, ny = (at(x, y + 1) - at(x, y - 1)) * k, nz = 1;
+      const l = Math.hypot(nx, ny, nz); nx /= l; ny /= l; nz /= l;
+      ni.data[o] = (nx * 0.5 + 0.5) * 255; ni.data[o + 1] = (ny * 0.5 + 0.5) * 255; ni.data[o + 2] = (nz * 0.5 + 0.5) * 255; ni.data[o + 3] = 255;
+    }
+  }
+  colorC.getContext('2d').putImageData(ci, 0, 0);
+  normalC.getContext('2d').putImageData(ni, 0, 0);
+  const mk = (c, srgb) => {
+    const t = new THREE.CanvasTexture(c);
+    t.wrapS = t.wrapT = THREE.RepeatWrapping;
+    t.repeat.set(26, 18);
+    t.anisotropy = renderer.capabilities.getMaxAnisotropy();
+    t.colorSpace = srgb ? THREE.SRGBColorSpace : THREE.NoColorSpace;
+    return t;
+  };
+  return { map: mk(colorC, true), normalMap: mk(normalC, false) };
+}
+
+function buildFabric() {
+  const FW = 40, FH = 28;
+  const geo = new THREE.PlaneGeometry(FW, FH, 240, 168);
+  const pos = geo.attributes.position;
+  for (let i = 0; i < pos.count; i++) {
+    const x = pos.getX(i), y = pos.getY(i);
+    // curvatura do tórax + rugas largas, achatadas onde o crachá prende o tecido
+    const chest = -0.011 * x * x - 0.004 * (y + 1) * (y + 1);
+    const dx = Math.max(0, Math.abs(x) - W / 2 - 0.2), dy = Math.max(0, Math.abs(y) - H / 2 - 0.2);
+    const free = Math.min(1, Math.hypot(dx, dy) / 2.5);
+    const wr = 0.09 * Math.sin(x * 0.55 + y * 0.35 + 0.6) + 0.05 * Math.sin(x * 0.21 - y * 0.9 + 2.1) + 0.03 * Math.sin(x * 1.3 + y * 0.2);
+    // o tecido "abraça" a borda da placa, levemente puxado para trás
+    const press = -0.03 * Math.exp(-Math.hypot(dx, dy) * 3);
+    pos.setZ(i, chest + wr * free * free + press);
+  }
+  geo.computeVertexNormals();
+  const weave = buildWeave();
+  const mat = new THREE.MeshPhysicalMaterial({
+    color: 0x151517,
+    map: weave.map,
+    normalMap: weave.normalMap,
+    normalScale: new THREE.Vector2(0.9, 0.9),
+    roughness: 0.92,
+    metalness: 0,
+    sheen: 1,
+    sheenRoughness: 0.55,
+    sheenColor: new THREE.Color(0x444444),
+    envMapIntensity: 0.5,
+  });
+  const mesh = new THREE.Mesh(geo, mat);
+  mesh.position.z = -(DEPTH / 2 + BEVEL) - 0.012; // atrás do verso: o ímã fica do outro lado do tecido
+  mesh.receiveShadow = true;
+  return mesh;
+}
+
+const fabric = buildFabric();
+rig.add(fabric);
+
+function setFabric(id) {
+  state.fabric = id;
+  const f = FABRICS[id];
+  fabric.visible = id !== 'none';
+  if (f.color) {
+    const c = new THREE.Color(f.color);
+    fabric.material.color.copy(c);
+    // brilho aveludado puxa para a própria cor, mais claro
+    fabric.material.sheenColor.copy(c).lerp(new THREE.Color(0xffffff), 0.35).multiplyScalar(0.6);
+  }
+  fill.intensity = fabric.visible ? 0.9 : 0;
+}
 
 /* ---------- Arte impressa ---------- */
 // Tudo em px de textura. A textura cobre a placa + chanfro; PX converte unidades 3D em px.
@@ -379,7 +553,15 @@ function drawArt(ctx, fill, colored = false) {
   const logo = logos[state.brand];
   if (logo) {
     const lh = fh * BRANDS[state.brand].h;
-    drawLogo(ctx, logo, { x: logoBox.x, y: layout.cy - lh / 2, w: logoBox.w, h: lh }, colored);
+    const box = { x: logoBox.x, y: layout.cy - lh / 2, w: logoBox.w, h: lh };
+    if (colored && state.logoInk !== 'brand') {
+      // logo chapado em preto ou branco: só a camada de cor muda, a tinta continua tinta nas outras
+      ctx.fillStyle = LOGO_INK[state.logoInk];
+      drawLogo(ctx, logo, box, false);
+      ctx.fillStyle = fill;
+    } else {
+      drawLogo(ctx, logo, box, colored);
+    }
   }
 
   const name = state.name.trim().toUpperCase();
@@ -388,8 +570,8 @@ function drawArt(ctx, fill, colored = false) {
 
   ctx.textAlign = 'center';
   ctx.textBaseline = 'alphabetic';
-  const NAME = (px) => SANS(px, 400);
-  const ROLE = (px) => SANS(px, 500);
+  const NAME = (px) => MONT(px, 400);
+  const ROLE = (px) => MONT(px, 500);
 
   // [texto, fonte, px, tracking]
   const lines = [];
@@ -486,6 +668,38 @@ document.getElementById('brands').addEventListener('keydown', (e) => {
   next.focus();
 });
 
+const inkButtons = [...document.querySelectorAll('#logoInk button')];
+inkButtons.forEach((b) => b.addEventListener('click', () => {
+  state.logoInk = b.dataset.ink;
+  for (const v of inkButtons) v.setAttribute('aria-checked', String(v === b));
+  queueCompose();
+}));
+
+const fabricChips = document.getElementById('fabrics');
+fabricChips.replaceChildren(...Object.entries(FABRICS).map(([id, f]) => {
+  const b = document.createElement('button');
+  b.type = 'button';
+  b.setAttribute('role', 'radio');
+  b.dataset.fabric = id;
+  b.setAttribute('aria-checked', String(id === state.fabric));
+  const dot = document.createElement('span');
+  dot.className = 'dot' + (id === 'none' ? ' dot-none' : '');
+  if (f.color) dot.style.background = f.color;
+  b.append(dot, f.label);
+  b.addEventListener('click', () => {
+    setFabric(id);
+    for (const c of fabricChips.children) c.setAttribute('aria-checked', String(c === b));
+  });
+  return b;
+}));
+setFabric(state.fabric);
+
+const viewButtons = [...document.querySelectorAll('#view button')];
+viewButtons.forEach((b) => b.addEventListener('click', () => {
+  flipTarget = b.dataset.view === 'back' ? Math.PI : 0;
+  for (const v of viewButtons) v.setAttribute('aria-checked', String(v === b));
+}));
+
 document.getElementById('name').addEventListener('input', (e) => { state.name = e.target.value; queueCompose(); });
 roleInput.addEventListener('input', (e) => { state.role = e.target.value; renderRoleChips(); queueCompose(); });
 
@@ -505,13 +719,27 @@ function resize() {
 new ResizeObserver(resize).observe(stage);
 
 const clock = new THREE.Clock();
+let flip = 0;        // 0 = frente, PI = verso
+let flipTarget = 0;
+let lastT = 0;
 function tick() {
   const t = clock.getElapsedTime();
+  const dt = Math.min(0.05, t - lastT);
+  lastT = t;
+  // aproximação exponencial: interrompível no meio se trocar de novo
+  flip += (flipTarget - flip) * (1 - Math.exp(-dt * 5));
   // flutuação lenta, como sem gravidade
-  floatGroup.position.y = Math.sin(t * 0.7) * 0.12;
-  floatGroup.rotation.y = Math.sin(t * 0.32) * 0.32;
-  floatGroup.rotation.x = Math.sin(t * 0.45 + 1.2) * 0.07;
-  floatGroup.rotation.z = Math.sin(t * 0.27 + 0.4) * 0.025;
+  // com tecido, o movimento vira respiração: bem menor
+  const worn = state.fabric !== 'none';
+  const amp = worn ? 0.25 : 1;
+  rig.position.y = Math.sin(t * 0.7) * 0.12 * amp;
+  rig.position.z = worn ? Math.sin(t * 0.7) * 0.05 : 0;
+  rig.rotation.y = Math.sin(t * 0.32) * 0.32 * amp;
+  rig.rotation.x = Math.sin(t * 0.45 + 1.2) * 0.07 * amp;
+  rig.rotation.z = Math.sin(t * 0.27 + 0.4) * 0.025 * amp;
+  floatGroup.rotation.y = flip;
+  // no verso, o tecido sai de cena para mostrar o ímã
+  fabric.visible = worn && flip < Math.PI / 2;
   controls.update();
   renderer.render(scene, camera);
   requestAnimationFrame(tick);
@@ -527,8 +755,8 @@ function mulberry32(a) {
 }
 
 await Promise.all([
-  document.fonts.load(SANS(100, 400), 'Ag'),
-  document.fonts.load(SANS(100, 500), 'Ag'),
+  document.fonts.load(MONT(100, 400), 'AgÃÇ'),
+  document.fonts.load(MONT(100, 500), 'AgÃÇ'),
   ...Object.entries(BRANDS).map(async ([k, b]) => { logos[k] = await loadLogo(b.logo); }),
 ]);
 renderRoleChips();
