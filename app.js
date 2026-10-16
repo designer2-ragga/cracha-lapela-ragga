@@ -14,7 +14,8 @@ const TEX_H = Math.round(TEX_W * (H + BEVEL * 2) / (W + BEVEL * 2));
 /* ---------- Estado ---------- */
 const state = {
   brand: 'biggs',
-  logoInk: 'brand', // 'brand' | 'black' | 'white'
+  // cor do logo guardada por marca: trocar o Isaias para preto não mexe na Biggs
+  logoInk: { biggs: 'brand', robs: 'brand', isaias: 'brand', mapoli: 'brand' }, // 'brand' | 'black' | 'white'
   fabric: 'black',
   name: document.getElementById('name').value,
   role: document.getElementById('role').value,
@@ -23,19 +24,19 @@ const state = {
 // h = altura máxima do logo em fração da placa (símbolos sobem mais que logotipos)
 const BRANDS = {
   biggs: {
-    label: 'Biggs', logo: 'logos/biggs-b.svg', h: 0.58,
+    label: 'Biggs', ink: 'Vermelho Biggs', logo: 'logos/biggs-b.svg', h: 0.58,
     roles: ['Gerente de Loja', 'Gerente Administrativo', 'Gerente de Salão', 'Gerente de Delivery', 'Caixa / Delivery', 'Garçom', 'Atendente de Delivery', 'Auxiliar de Sushiman'],
   },
   robs: {
-    label: "Rob's", logo: 'logos/robs.svg', h: 0.44,
+    label: "Rob's", ink: "Vermelho Rob's", logo: 'logos/robs.svg', h: 0.44,
     roles: ['Líder de Loja', 'Atendente de Loja', 'Oficial de Entrega'],
   },
   isaias: {
-    label: 'Isaias', logo: 'logos/isaias.svg', h: 0.44,
+    label: 'Isaias', ink: 'Amarelo Isaias', logo: 'logos/isaias.svg', h: 0.44,
     roles: ['Gerente de Loja', 'Gerente Administrativo', 'Gerente de Atendimento', 'Caixa / Delivery', 'Garçom', 'Atendente de Delivery', 'Atendente de Recepção', 'Recepcionista'],
   },
   mapoli: {
-    label: 'Mapoli', logo: 'logos/mapoli-m.svg', h: 0.6,
+    label: 'Mapoli', ink: 'Vermelho Mapoli', logo: 'logos/mapoli-m.svg', h: 0.6,
     roles: ['Garçom'],
   },
 };
@@ -342,14 +343,10 @@ function buildMagnet() {
 
 /* ---------- Tecido (peito de quem usa o crachá) ---------- */
 const FABRICS = {
-  none:   { label: 'Sem tecido' },
-  black:  { label: 'Preto',  color: '#151517' },
-  white:  { label: 'Branco', color: '#e9e8e4' },
-  ragga:  { label: 'Ragga',  color: '#2d1b4e' },
-  biggs:  { label: 'Biggs',  color: '#d82c32' },
-  robs:   { label: "Rob's",  color: '#c3161c' },
-  isaias: { label: 'Isaias', color: '#ffc025' },
-  mapoli: { label: 'Mapoli', color: '#e73439' },
+  none:  { label: 'Sem tecido' },
+  // sheen = força do brilho aveludado; no preto fica baixo para não acinzentar
+  black: { label: 'Preto',  color: '#060607', sheen: 0.12 },
+  white: { label: 'Branco', color: '#f8f4ec', sheen: 0.45 }, // off-white com creme bem leve
 };
 
 // Sarja 2/2 (diagonal de camisa social / uniforme): altura de cada fio vira normal map,
@@ -357,8 +354,8 @@ const FABRICS = {
 function buildWeave() {
   const S = 512, N = 48, cell = S / N;
   const rnd = mulberry32(21);
-  const warpTone = Array.from({ length: N }, () => 0.86 + rnd() * 0.14);
-  const weftTone = Array.from({ length: N }, () => 0.86 + rnd() * 0.14);
+  const warpTone = Array.from({ length: N }, () => 0.93 + rnd() * 0.07);
+  const weftTone = Array.from({ length: N }, () => 0.93 + rnd() * 0.07);
   const hgt = new Float32Array(S * S);
   const alb = new Float32Array(S * S);
   for (let y = 0; y < S; y++) {
@@ -374,7 +371,7 @@ function buildWeave() {
       const h = round * dip + fiber * round;
       hgt[y * S + x] = h;
       const tone = warpOver ? warpTone[i] : weftTone[j];
-      alb[y * S + x] = tone * (0.7 + 0.3 * h);
+      alb[y * S + x] = tone * (0.84 + 0.16 * h); // o relevo fica por conta do normal map
     }
   }
   const colorC = document.createElement('canvas');
@@ -453,9 +450,9 @@ function setFabric(id) {
     const c = new THREE.Color(f.color);
     fabric.material.color.copy(c);
     // brilho aveludado puxa para a própria cor, mais claro
-    fabric.material.sheenColor.copy(c).lerp(new THREE.Color(0xffffff), 0.35).multiplyScalar(0.6);
+    fabric.material.sheenColor.copy(c).lerp(new THREE.Color(0xffffff), 0.35).multiplyScalar(f.sheen);
   }
-  fill.intensity = fabric.visible ? 0.9 : 0;
+  fill.intensity = fabric.visible ? (id === 'black' ? 0.5 : 1.5) : 0;
 }
 
 /* ---------- Arte impressa ---------- */
@@ -554,9 +551,10 @@ function drawArt(ctx, fill, colored = false) {
   if (logo) {
     const lh = fh * BRANDS[state.brand].h;
     const box = { x: logoBox.x, y: layout.cy - lh / 2, w: logoBox.w, h: lh };
-    if (colored && state.logoInk !== 'brand') {
+    const ink = state.logoInk[state.brand];
+    if (colored && ink !== 'brand') {
       // logo chapado em preto ou branco: só a camada de cor muda, a tinta continua tinta nas outras
-      ctx.fillStyle = LOGO_INK[state.logoInk];
+      ctx.fillStyle = LOGO_INK[ink];
       drawLogo(ctx, logo, box, false);
       ctx.fillStyle = fill;
     } else {
@@ -629,7 +627,8 @@ function queueCompose() {
 }
 
 /* ---------- UI ---------- */
-const brandButtons = [...document.querySelectorAll('#brands button')];
+const brandSelect = document.getElementById('brand');
+const inkSelect = document.getElementById('logoInk');
 const roleInput = document.getElementById('role');
 const roleChips = document.getElementById('roleChips');
 
@@ -650,30 +649,31 @@ function renderRoleChips() {
   }));
 }
 
+brandSelect.replaceChildren(...Object.entries(BRANDS).map(([id, b]) => new Option(b.label, id)));
+
+// a primeira opção leva o nome da cor da própria marca; o valor salvo é o da marca atual
+function renderInkSelect() {
+  inkSelect.replaceChildren(
+    new Option(BRANDS[state.brand].ink, 'brand'),
+    new Option('Preto', 'black'),
+    new Option('Branco', 'white'),
+  );
+  inkSelect.value = state.logoInk[state.brand];
+}
+
 function setBrand(brand) {
   state.brand = brand;
-  for (const b of brandButtons) b.setAttribute('aria-checked', String(b.dataset.brand === brand));
+  brandSelect.value = brand;
+  renderInkSelect();
   renderRoleChips();
   queueCompose();
 }
 
-brandButtons.forEach((b) => b.addEventListener('click', () => setBrand(b.dataset.brand)));
-document.getElementById('brands').addEventListener('keydown', (e) => {
-  if (!['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(e.key)) return;
-  e.preventDefault();
-  const i = brandButtons.findIndex((b) => b.dataset.brand === state.brand);
-  const dir = e.key === 'ArrowLeft' || e.key === 'ArrowUp' ? -1 : 1;
-  const next = brandButtons[(i + dir + brandButtons.length) % brandButtons.length];
-  setBrand(next.dataset.brand);
-  next.focus();
-});
-
-const inkButtons = [...document.querySelectorAll('#logoInk button')];
-inkButtons.forEach((b) => b.addEventListener('click', () => {
-  state.logoInk = b.dataset.ink;
-  for (const v of inkButtons) v.setAttribute('aria-checked', String(v === b));
+brandSelect.addEventListener('change', () => setBrand(brandSelect.value));
+inkSelect.addEventListener('change', () => {
+  state.logoInk[state.brand] = inkSelect.value;
   queueCompose();
-}));
+});
 
 const fabricChips = document.getElementById('fabrics');
 fabricChips.replaceChildren(...Object.entries(FABRICS).map(([id, f]) => {
@@ -759,7 +759,7 @@ await Promise.all([
   document.fonts.load(MONT(100, 500), 'AgÃÇ'),
   ...Object.entries(BRANDS).map(async ([k, b]) => { logos[k] = await loadLogo(b.logo); }),
 ]);
-renderRoleChips();
+setBrand(state.brand);
 composeFront();
 resize();
 tick();
