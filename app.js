@@ -16,33 +16,48 @@ const state = {
   brand: 'biggs',
   // cor do logo guardada por marca: trocar o Isaias para preto não mexe na Biggs
   logoInk: { biggs: 'brand', robs: 'brand', isaias: 'brand', mapoli: 'brand', pepito: 'brand' }, // 'brand' | 'black' | 'white'
+  // acabamento por marca: 'brushed' (só escovado) ou o id de um esmalte da marca
+  finish: { biggs: 'red', robs: 'yellow', isaias: 'black', mapoli: 'brown', pepito: 'red' },
   fabric: 'black',
   name: document.getElementById('name').value,
   role: document.getElementById('role').value,
 };
 /* ---------- Marcas: logos do manual-ragga, cargos da planilha "Cargos por lojas" ---------- */
 // h = altura máxima do logo em fração da placa (símbolos sobem mais que logotipos)
+// organograma: as vagas de crachá padronizadas (Biggs e Isaias)
+const STANDARD_ROLES = ['Caixa', 'Caixa / Delivery', 'Garçom', 'Gerente de Salão', 'Gerente de Loja', 'Gerente ADM'];
+
 const BRANDS = {
   biggs: {
-    label: 'Biggs', ink: 'Vermelho Biggs', logo: 'logos/biggs-b.svg', tile: 'logos/ui/biggs.svg', h: 0.58,
-    roles: ['Gerente de Loja', 'Gerente Administrativo', 'Gerente de Salão', 'Gerente de Delivery', 'Caixa / Delivery', 'Garçom', 'Atendente de Delivery', 'Auxiliar de Sushiman'],
+    label: 'Biggs', ink: 'Vermelho Biggs', main: '#D82C32', logo: 'logos/biggs-b.svg', tile: 'logos/ui/biggs.svg', h: 0.58,
+    roles: STANDARD_ROLES,
+    enamels: [{ id: 'red', label: 'Esmalte vermelho', color: '#D82C32' }],
   },
   robs: {
-    label: "Rob's", ink: "Vermelho Rob's", logo: 'logos/robs.svg', tile: 'logos/ui/robs.svg', h: 0.44,
+    label: "Rob's", ink: "Vermelho Rob's", main: '#C3161C', logo: 'logos/robs.svg', tile: 'logos/ui/robs.svg', h: 0.44,
     roles: ['Líder de Loja', 'Atendente de Loja', 'Oficial de Entrega'],
+    // amarelo = selo circular oficial; alaranjado é proposta (não há laranja no manual)
+    // fundo claro: letras e logo em esmalte escuro, porque metal sobre amarelo some
+    enamels: [
+      { id: 'yellow', label: 'Esmalte amarelo', color: '#EAC900', art: '#1a1410' },
+      { id: 'orange', label: 'Esmalte alaranjado', color: '#F0841E', art: '#1a1410' },
+    ],
   },
   isaias: {
-    label: 'Isaias', ink: 'Amarelo Isaias', logo: 'logos/isaias.svg', tile: 'logos/ui/isaias.svg', h: 0.44,
-    roles: ['Gerente de Loja', 'Gerente Administrativo', 'Gerente de Atendimento', 'Caixa / Delivery', 'Garçom', 'Atendente de Delivery', 'Atendente de Recepção', 'Recepcionista'],
+    label: 'Isaias', ink: 'Amarelo Isaias', main: '#FFC025', logo: 'logos/isaias.svg', tile: 'logos/ui/isaias.svg', h: 0.44,
+    roles: STANDARD_ROLES,
+    enamels: [{ id: 'black', label: 'Esmalte preto', color: '#1a1410' }],
   },
   mapoli: {
-    label: 'Mapoli', ink: 'Vermelho Mapoli', logo: 'logos/mapoli-m.svg', tile: 'logos/ui/mapoli.svg', h: 0.6,
+    label: 'Mapoli', ink: 'Vermelho Mapoli', main: '#E73439', logo: 'logos/mapoli-m.svg', tile: 'logos/ui/mapoli.svg', h: 0.6,
     roles: ['Garçom'],
+    enamels: [{ id: 'brown', label: 'Esmalte marrom', color: '#442924' }], // Marrom profundo, manual Mapoli (476 C)
   },
   pepito: {
     // sem aba na planilha de cargos: só o campo livre por enquanto
-    label: 'Pepito', ink: 'Vermelho Pepito', logo: 'logos/pepito.svg', tile: 'logos/ui/pepito.svg', h: 0.44,
+    label: 'Pepito', ink: 'Vermelho Pepito', main: '#E73A28', logo: 'logos/pepito.svg', tile: 'logos/ui/pepito.svg', h: 0.44,
     roles: [],
+    enamels: [{ id: 'red', label: 'Esmalte vermelho', color: '#e73a28' }],
   },
 };
 const logos = {}; // canvas já recortado na tinta, por marca
@@ -211,6 +226,7 @@ const front = {
   orm: makeCanvas(),
   bump: makeCanvas(),
   aniso: makeCanvas(),
+  coat: makeCanvas(), // R = verniz vítreo do esmalte
 };
 
 function tex(canvas, srgb = false) {
@@ -227,6 +243,7 @@ const frontTex = {
   orm: tex(front.orm),
   bump: tex(front.bump),
   aniso: tex(front.aniso),
+  coat: tex(front.coat),
 };
 
 /* ---------- Geometria ---------- */
@@ -290,6 +307,9 @@ const faceMaterial = (t) => new THREE.MeshPhysicalMaterial({
   bumpScale: 0.9,
   anisotropy: 1,
   anisotropyMap: t.aniso,
+  clearcoat: 1,
+  clearcoatMap: t.coat,
+  clearcoatRoughness: 0.05,
   envMapIntensity: 1.25,
 });
 
@@ -545,12 +565,12 @@ function capHeight(ctx) {
   return ctx.measureText('H').actualBoundingBoxAscent;
 }
 
-function drawArt(ctx, fill, colored = false) {
+function drawArt(ctx, fill, colored = false, frameLine = true) {
   const { frame, logoBox, textCx, textW, cy, fh } = layout;
   ctx.fillStyle = fill;
   ctx.strokeStyle = fill;
 
-  strokeRoundedRect(ctx, frame);
+  if (frameLine) strokeRoundedRect(ctx, frame);
 
   const logo = logos[state.brand];
   if (logo) {
@@ -567,12 +587,17 @@ function drawArt(ctx, fill, colored = false) {
     }
   }
 
-  const name = state.name.trim().toUpperCase();
-  const role = state.role.trim().toUpperCase();
-  if (!name && !role) return;
+  // crachá nunca sai sem nome ou sem cargo: campo vazio mostra o marcador
+  const name = (state.name.trim() || 'Nome').toUpperCase();
+  const role = (state.role.trim() || 'Cargo').toUpperCase();
 
   ctx.textAlign = 'center';
   ctx.textBaseline = 'alphabetic';
+  // texto sempre acompanha o logo: na camada de cor, usa a mesma cor que o logo recebeu
+  if (colored) {
+    const ink = state.logoInk[state.brand];
+    ctx.fillStyle = ink === 'brand' ? BRANDS[state.brand].main : LOGO_INK[ink];
+  }
   const NAME = (px) => MONT(px, 400);
   const ROLE = (px) => MONT(px, 500);
 
@@ -605,7 +630,83 @@ function drawArt(ctx, fill, colored = false) {
   ctx.letterSpacing = '0px';
 }
 
+// valor salvo: '<esmalte>' (borda em metal) ou '<esmalte>:neg' (esmalte inteiro, linha fina negativa)
+function currentEnamel() {
+  const [id, mode] = state.finish[state.brand].split(':');
+  const e = BRANDS[state.brand].enamels.find((en) => en.id === id);
+  return e ? { ...e, negative: mode === 'neg' } : null;
+}
+
+// Placa esmaltada de verdade: o metal forma fio, logo e letras em relevo;
+// o esmalte preenche o fundo rebaixado. No negativo, o esmalte vai até a borda
+// e o filete fino original aparece vazado em escovado.
+function enamelMask(negative) {
+  const c = makeCanvas();
+  const x = c.getContext('2d');
+  const f = layout.frame;
+  x.fillStyle = '#fff';
+  if (negative) {
+    x.fillRect(0, 0, TEX_W, TEX_H);
+  } else {
+    const k = f.line * 1.8; // um respiro de metal entre o fio e o esmalte
+    x.beginPath();
+    x.roundRect(f.x + k, f.y + k, f.w - k * 2, f.h - k * 2, Math.max(0, f.r - k));
+    x.fill();
+  }
+  x.globalCompositeOperation = 'destination-out';
+  drawArt(x, '#000', false);
+  return c;
+}
+
+// só logo e letras (sem o fio), para pintar com um segundo esmalte
+function artMask() {
+  const c = makeCanvas();
+  drawArt(c.getContext('2d'), '#fff', false, false);
+  return c;
+}
+
+function tinted(mask, color) {
+  const c = makeCanvas();
+  const x = c.getContext('2d');
+  x.drawImage(mask, 0, 0);
+  x.globalCompositeOperation = 'source-in';
+  x.fillStyle = color;
+  x.fillRect(0, 0, TEX_W, TEX_H);
+  return c;
+}
+
 function composeFront() {
+  const enamel = currentEnamel();
+  if (enamel) {
+    const m = enamelMask(enamel.negative);
+    const a = enamel.art ? artMask() : null; // letras em esmalte escuro
+    const layers = [
+      // [canvas, base, cor no esmalte, cor nas letras, desfoque]
+      [front.color, base.color, enamel.color, enamel.art, 0],
+      [front.orm,   base.orm,   'rgb(255,18,0)', 'rgb(255,18,0)', 0],  // esmalte: liso, brilhante e não metálico
+      [front.bump,  base.bump,  '#1c1c1c', '#1c1c1c', 2],             // rebaixado: o fio fica em relevo
+      [front.aniso, base.aniso, 'rgb(255,128,0)', 'rgb(255,128,0)', 0], // sem escovação no esmalte
+    ];
+    for (const [cv, src, color, artColor, blur] of layers) {
+      const ctx = cv.getContext('2d');
+      ctx.filter = 'none';
+      ctx.drawImage(src, 0, 0);
+      ctx.filter = blur ? `blur(${blur}px)` : 'none';
+      ctx.drawImage(tinted(m, color), 0, 0);
+      if (a) ctx.drawImage(tinted(a, artColor), 0, 0);
+      ctx.filter = 'none';
+    }
+    const cc = front.coat.getContext('2d');
+    cc.fillStyle = '#000';
+    cc.fillRect(0, 0, TEX_W, TEX_H);
+    cc.drawImage(tinted(m, '#fff'), 0, 0);
+    if (a) cc.drawImage(tinted(a, '#fff'), 0, 0);
+    for (const t of Object.values(frontTex)) t.needsUpdate = true;
+    return;
+  }
+  const cc = front.coat.getContext('2d');
+  cc.fillStyle = '#000';
+  cc.fillRect(0, 0, TEX_W, TEX_H);
   const layers = [
     // [canvas, base, cor da tinta, desfoque, logo colorido]
     [front.color, base.color, '#0a0a0b', 0, true],          // impressão UV: texto preto, logo nas cores da marca
@@ -634,6 +735,8 @@ function queueCompose() {
 /* ---------- UI ---------- */
 const brandTiles = document.getElementById('brands');
 const inkSelect = document.getElementById('logoInk');
+const inkField = document.getElementById('inkField');
+const finishSelect = document.getElementById('finish');
 const roleInput = document.getElementById('role');
 const roleChips = document.getElementById('roleChips');
 
@@ -689,6 +792,19 @@ function renderInkSelect() {
   inkSelect.value = state.logoInk[state.brand];
 }
 
+function renderFinishSelect() {
+  finishSelect.replaceChildren(
+    ...BRANDS[state.brand].enamels.flatMap((e) => [
+      new Option(e.label, e.id),
+      new Option(`${e.label} · linha negativa`, `${e.id}:neg`),
+    ]),
+    new Option('Só escovado', 'brushed'),
+  );
+  finishSelect.value = state.finish[state.brand];
+  // no esmalte o logo é metal em relevo: a cor do logo não se aplica
+  inkField.hidden = !!currentEnamel();
+}
+
 function setBrand(brand) {
   state.brand = brand;
   for (const t of brandTiles.children) {
@@ -696,10 +812,17 @@ function setBrand(brand) {
     t.setAttribute('aria-checked', String(on));
     t.tabIndex = on ? 0 : -1;
   }
+  renderFinishSelect();
   renderInkSelect();
   renderRoleChips();
   queueCompose();
 }
+
+finishSelect.addEventListener('change', () => {
+  state.finish[state.brand] = finishSelect.value;
+  inkField.hidden = !!currentEnamel();
+  queueCompose();
+});
 
 inkSelect.addEventListener('change', () => {
   state.logoInk[state.brand] = inkSelect.value;
@@ -725,8 +848,9 @@ fabricChips.replaceChildren(...Object.entries(FABRICS).map(([id, f]) => {
 }));
 setFabric(state.fabric);
 
-document.getElementById('name').addEventListener('input', (e) => { state.name = e.target.value; queueCompose(); });
-roleInput.addEventListener('input', (e) => { state.role = e.target.value; renderRoleChips(); queueCompose(); });
+const markEmpty = (el) => el.setAttribute('aria-invalid', String(!el.value.trim()));
+document.getElementById('name').addEventListener('input', (e) => { state.name = e.target.value; markEmpty(e.target); queueCompose(); });
+roleInput.addEventListener('input', (e) => { state.role = e.target.value; markEmpty(e.target); renderRoleChips(); queueCompose(); });
 
 /* ---------- Loop ---------- */
 const hint = document.querySelector('.hint');

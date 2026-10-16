@@ -183,6 +183,8 @@ input[type="text"] {
 }
 input[type="text"]:hover { background: var(--surface-hover); }
 input[type="text"]:focus { outline: none; box-shadow: inset 0 0 0 1px var(--roxo-text); }
+input[type="text"][aria-invalid="true"] { box-shadow: inset 0 0 0 1px #e0605a; }
+.field[hidden] { display: none; }
 
 /* botões de marca: outer 12 = inner 8 + padding 4 */
 .brand-grid {

@@ -36,6 +36,11 @@
       </div>
 
       <div class="field">
+        <label class="label" for="finish">Acabamento</label>
+        <div class="select"><select id="finish"></select></div>
+      </div>
+
+      <div class="field" id="inkField">
         <label class="label" for="logoInk">Cor do logo</label>
         <div class="select"><select id="logoInk"></select></div>
       </div>
@@ -47,12 +52,12 @@
 
       <label class="field">
         <span class="label">Primeiro nome</span>
-        <input id="name" type="text" maxlength="18" value="Marina" placeholder="Em branco: some do crachá" autocomplete="off" spellcheck="false" />
+        <input id="name" type="text" maxlength="18" value="Marina" placeholder="Obrigatório" required autocomplete="off" spellcheck="false" />
       </label>
 
       <div class="field">
         <label class="label" for="role">Cargo</label>
-        <input id="role" type="text" maxlength="28" value="Gerente de Loja" placeholder="Em branco: some do crachá" autocomplete="off" spellcheck="false" />
+        <input id="role" type="text" maxlength="28" value="Gerente de Loja" placeholder="Obrigatório" required autocomplete="off" spellcheck="false" />
         <div class="chips" id="roleChips" aria-label="Cargos desta marca"></div>
       </div>
     </aside>
