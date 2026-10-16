@@ -207,6 +207,8 @@ input[type="text"]:focus { outline: none; box-shadow: inset 0 0 0 1px var(--roxo
   transition-duration: 160ms;
   transition-timing-function: var(--ease);
 }
+/* número ímpar de marcas: a última ocupa a linha inteira */
+.brand-grid button:last-child:nth-child(odd) { grid-column: 1 / -1; }
 .brand-grid img {
   display: block;
   max-width: 100%;

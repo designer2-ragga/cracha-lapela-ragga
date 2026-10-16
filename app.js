@@ -15,7 +15,7 @@ const TEX_H = Math.round(TEX_W * (H + BEVEL * 2) / (W + BEVEL * 2));
 const state = {
   brand: 'biggs',
   // cor do logo guardada por marca: trocar o Isaias para preto não mexe na Biggs
-  logoInk: { biggs: 'brand', robs: 'brand', isaias: 'brand', mapoli: 'brand' }, // 'brand' | 'black' | 'white'
+  logoInk: { biggs: 'brand', robs: 'brand', isaias: 'brand', mapoli: 'brand', pepito: 'brand' }, // 'brand' | 'black' | 'white'
   fabric: 'black',
   name: document.getElementById('name').value,
   role: document.getElementById('role').value,
@@ -38,6 +38,11 @@ const BRANDS = {
   mapoli: {
     label: 'Mapoli', ink: 'Vermelho Mapoli', logo: 'logos/mapoli-m.svg', tile: 'logos/ui/mapoli.svg', h: 0.6,
     roles: ['Garçom'],
+  },
+  pepito: {
+    // sem aba na planilha de cargos: só o campo livre por enquanto
+    label: 'Pepito', ink: 'Vermelho Pepito', logo: 'logos/pepito.svg', tile: 'logos/ui/pepito.svg', h: 0.44,
+    roles: [],
   },
 };
 const logos = {}; // canvas já recortado na tinta, por marca
