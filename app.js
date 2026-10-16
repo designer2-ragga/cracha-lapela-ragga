@@ -725,12 +725,6 @@ fabricChips.replaceChildren(...Object.entries(FABRICS).map(([id, f]) => {
 }));
 setFabric(state.fabric);
 
-const viewButtons = [...document.querySelectorAll('#view button')];
-viewButtons.forEach((b) => b.addEventListener('click', () => {
-  flipTarget = b.dataset.view === 'back' ? Math.PI : 0;
-  for (const v of viewButtons) v.setAttribute('aria-checked', String(v === b));
-}));
-
 document.getElementById('name').addEventListener('input', (e) => { state.name = e.target.value; queueCompose(); });
 roleInput.addEventListener('input', (e) => { state.role = e.target.value; renderRoleChips(); queueCompose(); });
 
@@ -750,15 +744,8 @@ function resize() {
 new ResizeObserver(resize).observe(stage);
 
 const clock = new THREE.Clock();
-let flip = 0;        // 0 = frente, PI = verso
-let flipTarget = 0;
-let lastT = 0;
 function tick() {
   const t = clock.getElapsedTime();
-  const dt = Math.min(0.05, t - lastT);
-  lastT = t;
-  // aproximação exponencial: interrompível no meio se trocar de novo
-  flip += (flipTarget - flip) * (1 - Math.exp(-dt * 5));
   // flutuação lenta, como sem gravidade
   // com tecido, o movimento vira respiração: bem menor
   const worn = state.fabric !== 'none';
@@ -768,9 +755,6 @@ function tick() {
   rig.rotation.y = Math.sin(t * 0.32) * 0.32 * amp;
   rig.rotation.x = Math.sin(t * 0.45 + 1.2) * 0.07 * amp;
   rig.rotation.z = Math.sin(t * 0.27 + 0.4) * 0.025 * amp;
-  floatGroup.rotation.y = flip;
-  // no verso, o tecido sai de cena para mostrar o ímã
-  fabric.visible = worn && flip < Math.PI / 2;
   controls.update();
   renderer.render(scene, camera);
   requestAnimationFrame(tick);
