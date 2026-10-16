@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Crachá Aço · Grupo Ragga</title>
+  <link rel="stylesheet" href="style.css" />
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"
+      }
+    }
+  </script>
+</head>
+<body>
+  <main class="app">
+    <section class="stage" id="stage">
+      <canvas id="scene"></canvas>
+      <p class="hint">Arraste para girar</p>
+    </section>
+
+    <aside class="panel">
+      <header class="panel-head">
+        <h1>Crachá</h1>
+        <span class="tag">BETA</span>
+      </header>
+
+      <div class="field">
+        <span class="label">Marca</span>
+        <div class="seg" role="radiogroup" aria-label="Marca" id="brands">
+          <button type="button" role="radio" data-brand="biggs" aria-checked="true">Biggs</button>
+          <button type="button" role="radio" data-brand="robs" aria-checked="false">Rob's</button>
+          <button type="button" role="radio" data-brand="isaias" aria-checked="false">Isaias</button>
+          <button type="button" role="radio" data-brand="mapoli" aria-checked="false">Mapoli</button>
+        </div>
+      </div>
+
+      <label class="field">
+        <span class="label">Primeiro nome</span>
+        <input id="name" type="text" maxlength="18" value="Marina" placeholder="Em branco: some do crachá" autocomplete="off" spellcheck="false" />
+      </label>
+
+      <label class="field">
+        <span class="label">Cargo</span>
+        <input id="role" type="text" maxlength="28" value="Gerente" placeholder="Em branco: some do crachá" autocomplete="off" spellcheck="false" />
+      </label>
+
+      <div class="field">
+        <span class="label">Logo da marca</span>
+        <label class="upload">
+          <span>Trocar logo (SVG ou PNG)</span>
+          <input id="logo" type="file" accept=".svg,.png,image/svg+xml,image/png" />
+        </label>
+        <p class="note" id="logoNote">Logo provisório. Suba o arquivo oficial para gravar no aço.</p>
+      </div>
+    </aside>
+  </main>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>
