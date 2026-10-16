@@ -24,19 +24,19 @@ const state = {
 // h = altura máxima do logo em fração da placa (símbolos sobem mais que logotipos)
 const BRANDS = {
   biggs: {
-    label: 'Biggs', ink: 'Vermelho Biggs', logo: 'logos/biggs-b.svg', h: 0.58,
+    label: 'Biggs', ink: 'Vermelho Biggs', logo: 'logos/biggs-b.svg', tile: 'logos/ui/biggs.svg', h: 0.58,
     roles: ['Gerente de Loja', 'Gerente Administrativo', 'Gerente de Salão', 'Gerente de Delivery', 'Caixa / Delivery', 'Garçom', 'Atendente de Delivery', 'Auxiliar de Sushiman'],
   },
   robs: {
-    label: "Rob's", ink: "Vermelho Rob's", logo: 'logos/robs.svg', h: 0.44,
+    label: "Rob's", ink: "Vermelho Rob's", logo: 'logos/robs.svg', tile: 'logos/ui/robs.svg', h: 0.44,
     roles: ['Líder de Loja', 'Atendente de Loja', 'Oficial de Entrega'],
   },
   isaias: {
-    label: 'Isaias', ink: 'Amarelo Isaias', logo: 'logos/isaias.svg', h: 0.44,
+    label: 'Isaias', ink: 'Amarelo Isaias', logo: 'logos/isaias.svg', tile: 'logos/ui/isaias.svg', h: 0.44,
     roles: ['Gerente de Loja', 'Gerente Administrativo', 'Gerente de Atendimento', 'Caixa / Delivery', 'Garçom', 'Atendente de Delivery', 'Atendente de Recepção', 'Recepcionista'],
   },
   mapoli: {
-    label: 'Mapoli', ink: 'Vermelho Mapoli', logo: 'logos/mapoli-m.svg', h: 0.6,
+    label: 'Mapoli', ink: 'Vermelho Mapoli', logo: 'logos/mapoli-m.svg', tile: 'logos/ui/mapoli.svg', h: 0.6,
     roles: ['Garçom'],
   },
 };
@@ -345,7 +345,7 @@ function buildMagnet() {
 const FABRICS = {
   none:  { label: 'Sem tecido' },
   // sheen = força do brilho aveludado; no preto fica baixo para não acinzentar
-  black: { label: 'Preto',  color: '#060607', sheen: 0.12 },
+  black: { label: 'Cinza escuro', color: '#34343a', sheen: 0.5 },
   white: { label: 'Branco', color: '#f8f4ec', sheen: 0.45 }, // off-white com creme bem leve
 };
 
@@ -452,7 +452,7 @@ function setFabric(id) {
     // brilho aveludado puxa para a própria cor, mais claro
     fabric.material.sheenColor.copy(c).lerp(new THREE.Color(0xffffff), 0.35).multiplyScalar(f.sheen);
   }
-  fill.intensity = fabric.visible ? (id === 'black' ? 0.5 : 1.5) : 0;
+  fill.intensity = fabric.visible ? (id === 'black' ? 1.3 : 1.5) : 0;
 }
 
 /* ---------- Arte impressa ---------- */
@@ -627,7 +627,7 @@ function queueCompose() {
 }
 
 /* ---------- UI ---------- */
-const brandSelect = document.getElementById('brand');
+const brandTiles = document.getElementById('brands');
 const inkSelect = document.getElementById('logoInk');
 const roleInput = document.getElementById('role');
 const roleChips = document.getElementById('roleChips');
@@ -649,7 +649,30 @@ function renderRoleChips() {
   }));
 }
 
-brandSelect.replaceChildren(...Object.entries(BRANDS).map(([id, b]) => new Option(b.label, id)));
+// botões com o logo completo: a marca escolhida fica colorida, as outras em preto e branco
+brandTiles.replaceChildren(...Object.entries(BRANDS).map(([id, b]) => {
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.setAttribute('role', 'radio');
+  btn.setAttribute('aria-label', b.label);
+  btn.dataset.brand = id;
+  const img = document.createElement('img');
+  img.alt = '';
+  // recorta na tinta, igual ao crachá, para todos os logos ocuparem o botão por igual
+  loadLogo(b.tile).then((c) => { img.src = c.toDataURL(); });
+  btn.append(img);
+  btn.addEventListener('click', () => setBrand(id));
+  return btn;
+}));
+brandTiles.addEventListener('keydown', (e) => {
+  if (!['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(e.key)) return;
+  e.preventDefault();
+  const ids = Object.keys(BRANDS);
+  const dir = e.key === 'ArrowLeft' || e.key === 'ArrowUp' ? -1 : 1;
+  const next = ids[(ids.indexOf(state.brand) + dir + ids.length) % ids.length];
+  setBrand(next);
+  brandTiles.querySelector(`[data-brand="${next}"]`).focus();
+});
 
 // a primeira opção leva o nome da cor da própria marca; o valor salvo é o da marca atual
 function renderInkSelect() {
@@ -663,13 +686,16 @@ function renderInkSelect() {
 
 function setBrand(brand) {
   state.brand = brand;
-  brandSelect.value = brand;
+  for (const t of brandTiles.children) {
+    const on = t.dataset.brand === brand;
+    t.setAttribute('aria-checked', String(on));
+    t.tabIndex = on ? 0 : -1;
+  }
   renderInkSelect();
   renderRoleChips();
   queueCompose();
 }
 
-brandSelect.addEventListener('change', () => setBrand(brandSelect.value));
 inkSelect.addEventListener('change', () => {
   state.logoInk[state.brand] = inkSelect.value;
   queueCompose();
