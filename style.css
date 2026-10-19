@@ -82,6 +82,45 @@ html, body {
 }
 .hint.is-hidden { opacity: 0; }
 
+/* copiar a cena para a área de transferência */
+.shot {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  display: grid;
+  height: 40px;
+  padding: 0 16px;
+  border: 0;
+  border-radius: 10px;
+  background: rgba(14, 13, 17, 0.72);
+  box-shadow: inset 0 0 0 1px var(--hairline);
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  backdrop-filter: blur(8px);
+  transition-property: background-color, scale;
+  transition-duration: 160ms;
+  transition-timing-function: var(--ease);
+}
+.shot:hover { background: rgba(30, 27, 37, 0.9); }
+.shot:active { scale: 0.96; }
+.shot:focus-visible { outline: 2px solid var(--roxo-text); outline-offset: 2px; }
+/* os dois rótulos ocupam a mesma célula e trocam com fade: o botão não muda de lugar */
+.shot-label {
+  grid-area: 1 / 1;
+  align-self: center;
+  justify-self: center;
+  white-space: nowrap;
+  transition-property: opacity, filter, scale;
+  transition-duration: 220ms;
+  transition-timing-function: var(--ease);
+}
+.shot-label[data-state="done"] { opacity: 0; filter: blur(4px); scale: 0.9; }
+.shot.is-done .shot-label[data-state="idle"] { opacity: 0; filter: blur(4px); scale: 0.9; }
+.shot.is-done .shot-label[data-state="done"] { opacity: 1; filter: blur(0); scale: 1; }
+
 .panel {
   width: 340px;
   flex-shrink: 0;

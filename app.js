@@ -848,6 +848,53 @@ const markEmpty = (el) => el.setAttribute('aria-invalid', String(!el.value.trim(
 document.getElementById('name').addEventListener('input', (e) => { state.name = e.target.value; markEmpty(e.target); queueCompose(); });
 roleInput.addEventListener('input', (e) => { state.role = e.target.value; markEmpty(e.target); renderRoleChips(); queueCompose(); });
 
+/* ---------- Copiar imagem (cola direto com Ctrl+V) ---------- */
+const shotBtn = document.getElementById('shot');
+let shotTimer = 0;
+
+// renderiza um quadro em resolução alta (3x) e devolve o PNG; depois volta ao tamanho de tela
+function captureBlob() {
+  const prev = renderer.getPixelRatio();
+  const { clientWidth: w, clientHeight: h } = stage;
+  renderer.setPixelRatio(3);
+  renderer.setSize(w, h, false);
+  renderer.render(scene, camera);
+  return new Promise((resolve) => {
+    renderer.domElement.toBlob((blob) => {
+      renderer.setPixelRatio(prev);
+      renderer.setSize(w, h, false);
+      resolve(blob);
+    }, 'image/png');
+  });
+}
+
+function shotFileName() {
+  const slug = (t) => t.trim().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+  return `cracha-${slug(BRANDS[state.brand].label)}-${slug(state.name) || 'nome'}.png`;
+}
+
+shotBtn.addEventListener('click', async () => {
+  const blob = captureBlob();
+  try {
+    // a Promise dentro do ClipboardItem mantém o gesto do clique válido no Safari
+    await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
+  } catch {
+    // sem permissão de área de transferência: baixa o PNG no lugar
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(await blob);
+    a.download = shotFileName();
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+    shotBtn.querySelector('[data-state="done"]').textContent = 'Imagem baixada';
+  }
+  shotBtn.classList.add('is-done');
+  clearTimeout(shotTimer);
+  shotTimer = setTimeout(() => {
+    shotBtn.classList.remove('is-done');
+    shotBtn.querySelector('[data-state="done"]').textContent = 'Copiado, cole com Ctrl+V';
+  }, 1800);
+});
+
 /* ---------- Loop ---------- */
 const hint = document.querySelector('.hint');
 controls.addEventListener('start', () => hint.classList.add('is-hidden'), { once: true });
