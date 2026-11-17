@@ -49,7 +49,7 @@ const BRANDS = {
     enamels: [{ id: 'black', label: 'Esmalte preto', color: '#1a1410' }],
   },
   mapoli: {
-    label: 'Mapoli', ink: 'Vermelho Mapoli', logo: 'logos/mapoli-wordmark.svg', tile: 'logos/ui/mapoli.svg', h: 0.3, lw: 0.33,
+    label: 'Mapoli', ink: 'Vermelho Mapoli', logo: 'logos/mapoli-estrelas.svg', tile: 'logos/ui/mapoli.svg', h: 0.42, lw: 0.33,
     roles: ['Garçom'],
     enamels: [{ id: 'brown', label: 'Esmalte marrom', color: '#442924' }], // Marrom profundo, manual Mapoli (476 C)
   },
