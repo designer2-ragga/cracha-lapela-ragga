@@ -17,7 +17,7 @@ const state = {
   // cor do logo guardada por marca: trocar o Isaias para preto não mexe na Biggs
   logoInk: { biggs: 'brand', robs: 'brand', isaias: 'brand', mapoli: 'brand', pepito: 'brand' }, // 'brand' | 'black' | 'white'
   // acabamento por marca: 'brushed' (só escovado) ou o id de um esmalte da marca
-  finish: { biggs: 'red', robs: 'yellow', isaias: 'black', mapoli: 'brown', pepito: 'red' },
+  finish: { biggs: 'red', robs: 'yellow', isaias: 'black', mapoli: 'brown', pepito: 'white' },
   fabric: 'black',
   name: document.getElementById('name').value,
   role: document.getElementById('role').value,
@@ -29,7 +29,7 @@ const STANDARD_ROLES = ['Caixa', 'Caixa / Delivery', 'Garçom', 'Gerente de Sal�
 
 const BRANDS = {
   biggs: {
-    label: 'Biggs', ink: 'Vermelho Biggs', logo: 'logos/biggs-b.svg', tile: 'logos/ui/biggs.svg', h: 0.58,
+    label: 'Biggs', ink: 'Vermelho Biggs', logo: 'logos/biggs-bzao.svg', tile: 'logos/ui/biggs.svg', h: 0.6,
     roles: STANDARD_ROLES,
     enamels: [{ id: 'red', label: 'Esmalte vermelho', color: '#D82C32' }],
   },
@@ -49,7 +49,7 @@ const BRANDS = {
     enamels: [{ id: 'black', label: 'Esmalte preto', color: '#1a1410' }],
   },
   mapoli: {
-    label: 'Mapoli', ink: 'Vermelho Mapoli', logo: 'logos/mapoli-m.svg', tile: 'logos/ui/mapoli.svg', h: 0.6,
+    label: 'Mapoli', ink: 'Vermelho Mapoli', logo: 'logos/mapoli-wordmark.svg', tile: 'logos/ui/mapoli.svg', h: 0.3, lw: 0.33,
     roles: ['Garçom'],
     enamels: [{ id: 'brown', label: 'Esmalte marrom', color: '#442924' }], // Marrom profundo, manual Mapoli (476 C)
   },
@@ -57,7 +57,7 @@ const BRANDS = {
     // sem aba na planilha de cargos: só o campo livre por enquanto
     label: 'Pepito', ink: 'Vermelho Pepito', logo: 'logos/pepito.svg', tile: 'logos/ui/pepito.svg', h: 0.44,
     roles: [],
-    enamels: [{ id: 'red', label: 'Esmalte vermelho', color: '#e73a28' }],
+    enamels: [{ id: 'white', label: 'Esmalte branco', color: '#F7F6F2', art: '#E73A28' }],
   },
 };
 const logos = {}; // canvas já recortado na tinta, por marca
@@ -574,7 +574,8 @@ function drawArt(ctx, fill, colored = false, frameLine = true) {
   const logo = logos[state.brand];
   if (logo) {
     const lh = fh * BRANDS[state.brand].h;
-    const box = { x: logoBox.x, y: layout.cy - lh / 2, w: logoBox.w, h: lh };
+    const lw = BRANDS[state.brand].lw ? layout.fw * BRANDS[state.brand].lw : logoBox.w;
+    const box = { x: logoBox.x, y: layout.cy - lh / 2, w: lw, h: lh };
     const ink = state.logoInk[state.brand];
     if (colored && ink !== 'brand') {
       // logo chapado em preto ou branco: só a camada de cor muda, a tinta continua tinta nas outras
